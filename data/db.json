@@ -1,42 +1,117 @@
 {
   "sites": [
     {
-      "id": "site-seed-1",
+      "id": "site-d07",
       "cave": "北麓三号洞",
       "zone": "滴水帘区",
       "pointCode": "D-07",
       "route": "西线巡测",
       "sensitivity": "高",
-      "protectedStatus": "重点保护",
-      "baselineTemp": 16.2,
-      "baselineHumidity": 92,
-      "baselineCo2": 680,
-      "note": "游客步道上方，滴水频率稳定",
+      "note": "游客步道上方，藻类易复发",
       "createdAt": "2026-06-14T08:00:00.000Z",
-      "updatedAt": "2026-06-14T08:00:00.000Z",
+      "updatedAt": "2026-09-18T14:00:00.000Z",
       "history": [
         { "at": "2026-06-14T08:00:00.000Z", "action": "创建", "note": "样点建档" }
       ]
+    },
+    {
+      "id": "site-s02",
+      "cave": "北麓三号洞",
+      "zone": "石笋厅",
+      "pointCode": "S-02",
+      "route": "西线巡测",
+      "sensitivity": "中",
+      "note": "",
+      "createdAt": "2026-06-14T08:10:00.000Z",
+      "updatedAt": "2026-09-22T01:00:00.000Z",
+      "history": [
+        { "at": "2026-06-14T08:10:00.000Z", "action": "创建", "note": "样点建档" }
+      ]
+    },
+    {
+      "id": "site-h11",
+      "cave": "南麓一号洞",
+      "zone": "暗河廊道",
+      "pointCode": "H-11",
+      "route": "东线巡测",
+      "sensitivity": "低",
+      "note": "景观灯改造试点",
+      "createdAt": "2026-06-15T09:00:00.000Z",
+      "updatedAt": "2026-09-21T20:00:00.000Z",
+      "history": [
+        { "at": "2026-06-15T09:00:00.000Z", "action": "创建", "note": "样点建档" }
+      ]
     }
   ],
-  "surveys": [
+  "lightings": [
     {
-      "id": "survey-seed-1",
-      "siteId": "site-seed-1",
-      "surveyor": "沈宁",
-      "date": "2026-06-18",
-      "temperature": 17.4,
-      "humidity": 88,
-      "co2": 920,
-      "dripRate": 12,
-      "disturbance": "栏杆外侧有触碰痕迹",
-      "photoUrl": "",
-      "status": "异常待复查",
-      "reviewNote": "",
-      "createdAt": "2026-06-18T10:00:00.000Z",
-      "updatedAt": "2026-06-18T10:00:00.000Z",
+      "id": "lighting-seed-1",
+      "siteId": "site-d07",
+      "operator": "沈宁",
+      "lux": 120,
+      "startedAt": "2026-09-18T08:00:00.000Z",
+      "endedAt": "2026-09-18T14:00:00.000Z",
+      "endAlgaeIndex": 41,
+      "status": "已结束",
+      "reviewReasons": [],
+      "releasedAt": null,
+      "createdAt": "2026-09-18T08:00:00.000Z",
+      "updatedAt": "2026-09-18T14:00:00.000Z",
       "history": [
-        { "at": "2026-06-18T10:00:00.000Z", "action": "创建", "note": "CO2升高并有干扰痕迹" }
+        { "at": "2026-09-18T14:00:00.000Z", "action": "结束照明", "note": "时长 6 小时、暴露 720 勒克斯时，停光藻类指数 41" },
+        { "at": "2026-09-18T08:00:00.000Z", "action": "开灯", "note": "沈宁 开灯，照度 120 lux" }
+      ]
+    },
+    {
+      "id": "lighting-seed-2",
+      "siteId": "site-s02",
+      "operator": "陆远",
+      "lux": 150,
+      "startedAt": "2026-09-22T01:00:00.000Z",
+      "endedAt": null,
+      "endAlgaeIndex": null,
+      "status": "照明中",
+      "reviewReasons": [],
+      "releasedAt": null,
+      "createdAt": "2026-09-22T01:00:00.000Z",
+      "updatedAt": "2026-09-22T01:00:00.000Z",
+      "history": [
+        { "at": "2026-09-22T01:00:00.000Z", "action": "开灯", "note": "陆远 开灯，照度 150 lux" }
+      ]
+    },
+    {
+      "id": "lighting-seed-3",
+      "siteId": "site-h11",
+      "operator": "沈宁",
+      "lux": 200,
+      "startedAt": "2026-09-19T09:00:00.000Z",
+      "endedAt": "2026-09-19T18:30:00.000Z",
+      "endAlgaeIndex": 68,
+      "status": "待复核",
+      "reviewReasons": ["累计照度时长 1900 勒克斯时超过 1800 限值"],
+      "releasedAt": null,
+      "createdAt": "2026-09-19T09:00:00.000Z",
+      "updatedAt": "2026-09-21T20:00:00.000Z",
+      "history": [
+        { "at": "2026-09-21T20:00:00.000Z", "action": "复测登记", "note": "何静 复测藻类指数 55，回落" },
+        { "at": "2026-09-19T18:30:00.000Z", "action": "停光转待复核", "note": "时长 9.5 小时、暴露 1900 勒克斯时；累计照度时长 1900 勒克斯时超过 1800 限值" },
+        { "at": "2026-09-19T09:00:00.000Z", "action": "开灯", "note": "沈宁 开灯，照度 200 lux" }
+      ]
+    }
+  ],
+  "rechecks": [
+    {
+      "id": "recheck-seed-1",
+      "lightingId": "lighting-seed-3",
+      "siteId": "site-h11",
+      "operator": "何静",
+      "algaeIndex": 55,
+      "measuredAt": "2026-09-21T20:00:00.000Z",
+      "invalidated": false,
+      "createdAt": "2026-09-21T20:00:00.000Z",
+      "updatedAt": "2026-09-21T20:00:00.000Z",
+      "history": [
+        { "at": "2026-09-21T20:00:00.000Z", "action": "复测登记", "note": "何静 复测藻类指数 55" }
       ]
     }
   ]
