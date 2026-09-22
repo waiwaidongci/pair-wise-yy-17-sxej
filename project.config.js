@@ -1,32 +1,33 @@
 module.exports = {
   port: 3912,
-  title: '钟乳石洞穴微环境巡测',
-  lede: '围绕洞穴、分区、样点和巡测路线记录微环境数据，发现异常后生成复查闭环。',
+  title: '洞穴照明累积暴露与藻类停光复核台',
+  lede: '每样点同时只保留一条未结束照明记录，重复或并发开启沿用首次记录；累计照度时长超 1800 勒克斯小时或连续照明超 10 小时即停光待复核，期间禁止开新照明，须换人连续两次复测回落（间隔不少于 12 小时）方可复光。',
   tones: {
-    '常规观察': 'ok',
-    '正常': 'ok',
-    '已复查': 'ok',
-    '重点保护': 'warn',
-    '异常待复查': 'bad',
-    '暂停开放': 'bad'
+    '可照明': 'ok',
+    '照明中': 'warn',
+    '停光待复核': 'bad',
+    '已结束': '',
+    '待复核': 'bad',
+    '复测中': 'warn',
+    '已复光': 'ok'
   },
   collections: {
     sites: { label: '样点档案' },
-    surveys: { label: '巡测记录' }
+    exposures: { label: '照明记录' }
   },
   stats: [
     { label: '样点', collection: 'sites' },
-    { label: '重点保护', collection: 'sites', filter: { field: 'protectedStatus', value: '重点保护' } },
-    { label: '巡测记录', collection: 'surveys' },
-    { label: '待复查', collection: 'surveys', filter: { field: 'status', value: '异常待复查' } }
+    { label: '照明中', collection: 'exposures', filter: { field: 'status', values: ['照明中'] } },
+    { label: '停光待复核', collection: 'sites', filter: { field: 'lightStatus', values: ['停光待复核'] } },
+    { label: '复核记录', collection: 'exposures', filter: { field: 'status', values: ['待复核', '复测中'] } }
   ],
   views: [
     {
       id: 'dashboard',
-      label: '趋势看板',
+      label: '复核看板',
       type: 'dashboard',
-      focusTitle: '异常与复查',
-      focus: { collection: 'surveys', field: 'status', values: ['异常待复查'], limit: 8 }
+      focusTitle: '停光待复核与复测中',
+      focus: { collection: 'exposures', field: 'status', values: ['待复核', '复测中'], limit: 8 }
     },
     {
       id: 'sites',
@@ -37,14 +38,16 @@ module.exports = {
       submitLabel: '保存样点',
       searchPlaceholder: '搜索洞穴、分区、样点、路线',
       searchFields: ['cave', 'zone', 'pointCode', 'route'],
-      statusField: 'protectedStatus',
-      statusOptions: ['常规观察', '重点保护', '暂停开放'],
+      statusField: 'lightStatus',
+      statusOptions: ['可照明', '照明中', '停光待复核'],
       titleFields: ['pointCode', 'zone'],
       summaryFields: ['note'],
       detailFields: [
         { label: '洞穴', name: 'cave' },
         { label: '巡测路线', name: 'route' },
-        { label: '敏感等级', name: 'sensitivity' }
+        { label: '敏感等级', name: 'sensitivity' },
+        { label: '累计照度时长', name: 'cumulativeLuxHours', suffix: ' lx·h' },
+        { label: '暴露周期', name: 'currentCycle', prefix: '第 ', suffix: ' 轮' }
       ],
       fields: [
         { label: '洞穴', name: 'cave', required: true },
@@ -52,60 +55,94 @@ module.exports = {
         { label: '样点编号', name: 'pointCode', required: true },
         { label: '巡测路线', name: 'route', required: true },
         { label: '敏感等级', name: 'sensitivity', type: 'select', options: ['低', '中', '高'] },
-        { label: '保护状态', name: 'protectedStatus', type: 'select', options: ['常规观察', '重点保护', '暂停开放'] },
-        { label: '基准温度', name: 'baselineTemp', type: 'number', required: true },
-        { label: '基准湿度', name: 'baselineHumidity', type: 'number', required: true },
-        { label: '基准CO2', name: 'baselineCo2', type: 'number', required: true },
         { label: '备注', name: 'note', type: 'textarea', wide: true }
       ]
     },
     {
-      id: 'surveys',
-      label: '巡测记录',
-      collection: 'surveys',
-      formTitle: '登记巡测',
-      listTitle: '巡测历史',
-      submitLabel: '保存巡测',
-      searchPlaceholder: '搜索人员、干扰痕迹、照片',
-      searchFields: ['surveyor', 'disturbance', 'photoUrl'],
+      id: 'exposures',
+      label: '照明记录',
+      collection: 'exposures',
+      formTitle: '开启照明',
+      listTitle: '照明记录列表',
+      submitLabel: '开启照明',
+      hint: '同一样点已有未结束照明时将沿用首次记录；停光待复核期间禁止开启新照明。',
+      searchPlaceholder: '搜索操作员、备注',
+      searchFields: ['operator', 'note'],
       statusField: 'status',
-      statusOptions: ['正常', '异常待复查', '已复查'],
-      titleFields: ['surveyor', 'date'],
+      statusOptions: ['照明中', '已结束', '待复核', '复测中', '已复光'],
+      titleFields: ['operator'],
       relation: { collection: 'sites', localKey: 'siteId', labelFields: ['cave', 'zone', 'pointCode'] },
-      summaryFields: ['disturbance', 'reviewNote'],
+      summaryFields: ['note'],
       detailFields: [
-        { label: '温度', name: 'temperature' },
-        { label: '湿度', name: 'humidity' },
-        { label: 'CO2', name: 'co2' }
+        { label: '照度', name: 'lux', suffix: ' lx' },
+        { label: '照明时长', name: 'hours', type: 'liveHours', suffix: ' h' },
+        { label: '照度时长', name: 'luxHours', type: 'liveLuxHours', suffix: ' lx·h' },
+        { label: '累计照度时长', name: 'cumulativeLuxHours', suffix: ' lx·h' },
+        { label: '开始时间', name: 'startedAt', type: 'datetime' },
+        { label: '结束时间', name: 'endedAt', type: 'datetime' }
       ],
-      defaults: { status: '正常', reviewNote: '' },
       fields: [
         { label: '样点', name: 'siteId', type: 'relation', collection: 'sites', labelFields: ['cave', 'zone', 'pointCode'], required: true, wide: true },
-        { label: '巡测人员', name: 'surveyor', required: true },
-        { label: '日期', name: 'date', type: 'date', required: true },
-        { label: '温度', name: 'temperature', type: 'number', required: true },
-        { label: '湿度', name: 'humidity', type: 'number', required: true },
-        { label: 'CO2', name: 'co2', type: 'number', required: true },
-        { label: '滴水频率', name: 'dripRate', type: 'number', required: true },
-        { label: '照片链接', name: 'photoUrl' },
-        { label: '游客干扰痕迹', name: 'disturbance', type: 'textarea', wide: true }
+        { label: '操作员', name: 'operator', required: true },
+        { label: '照度(勒克斯)', name: 'lux', type: 'number', required: true },
+        { label: '开始时间', name: 'startedAt', type: 'datetime-local', defaultNow: true },
+        { label: '备注', name: 'note', type: 'textarea', wide: true }
       ]
     }
   ],
   actions: [
-    { id: 'site-normal', label: '常规观察', collection: 'sites', patches: [{ field: 'protectedStatus', value: '常规观察' }] },
-    { id: 'site-focus', label: '重点保护', collection: 'sites', patches: [{ field: 'protectedStatus', value: '重点保护' }] },
-    { id: 'site-close', label: '暂停开放', collection: 'sites', danger: true, patches: [{ field: 'protectedStatus', value: '暂停开放' }] },
     {
-      id: 'survey-alert',
-      label: '标记异常',
-      collection: 'surveys',
-      relation: { collection: 'sites', localKey: 'siteId' },
-      patches: [
-        { field: 'status', value: '异常待复查' },
-        { target: 'related', field: 'protectedStatus', value: '重点保护' }
+      id: 'exp-end',
+      label: '结束照明',
+      collection: 'exposures',
+      path: '/api/exposures/:id/end',
+      when: [{ field: 'endedAt', empty: true }, { field: 'status', values: ['照明中', '待复核'] }],
+      inputs: [
+        { label: '照明时长(小时)', name: 'hours', type: 'number', step: '0.1', required: true },
+        { label: '照度(勒克斯)', name: 'lux', type: 'number', prefill: 'lux' }
       ]
     },
-    { id: 'survey-review', label: '完成复查', collection: 'surveys', patches: [{ field: 'status', value: '已复查' }, { field: 'reviewNote', value: '异常已复核' }] }
+    {
+      id: 'exp-recheck',
+      label: '登记复测',
+      collection: 'exposures',
+      path: '/api/exposures/:id/recheck',
+      when: [
+        { field: 'endedAt', filled: true },
+        { field: 'status', values: ['待复核', '复测中'] },
+        { field: 'rechecks', maxLength: 1 }
+      ],
+      inputs: [
+        { label: '复测人（须换人）', name: 'operator', required: true },
+        { label: '藻类覆盖率(%)', name: 'value', type: 'number', step: '0.1', required: true },
+        { label: '复测时间', name: 'at', type: 'datetime-local', defaultNow: true }
+      ]
+    },
+    {
+      id: 'exp-resume',
+      label: '确认复光',
+      collection: 'exposures',
+      path: '/api/exposures/:id/resume',
+      when: [{ field: 'status', values: ['复测中'] }, { field: 'rechecks', minLength: 2 }],
+      inputs: [
+        { label: '复光确认人', name: 'operator', required: true }
+      ]
+    },
+    {
+      id: 'exp-edit',
+      label: '更正记录',
+      collection: 'exposures',
+      type: 'edit',
+      path: '/api/exposures/:id',
+      inputs: [
+        { label: '操作员', name: 'operator', prefill: 'operator', required: true },
+        { label: '照度(勒克斯)', name: 'lux', type: 'number', prefill: 'lux', required: true },
+        { label: '照明时长(小时)', name: 'hours', type: 'number', step: '0.1', prefill: 'hours' },
+        { label: '开始时间', name: 'startedAt', type: 'datetime-local', prefill: 'startedAt' },
+        { label: '结束时间', name: 'endedAt', type: 'datetime-local', prefill: 'endedAt' },
+        { label: '备注', name: 'note', prefill: 'note', wide: true },
+        { label: '更正说明', name: 'correctionNote', type: 'textarea', wide: true }
+      ]
+    }
   ]
 };

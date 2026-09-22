@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>业务系统</title>
+  <title>洞穴照明累积暴露与藻类停光复核台</title>
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
@@ -11,7 +11,7 @@
     <header>
       <div class="topline">
         <div>
-          <h1 id="title">业务系统</h1>
+          <h1 id="title">洞穴照明累积暴露与藻类停光复核台</h1>
           <p class="lede" id="lede"></p>
         </div>
         <button class="secondary" id="refreshBtn">刷新数据</button>
@@ -19,6 +19,16 @@
       <nav class="tabs" id="tabs"></nav>
     </header>
     <main id="main"></main>
+  </div>
+  <div class="modal" id="modal" hidden>
+    <form class="modal-card" id="modalForm">
+      <h2 id="modalTitle"></h2>
+      <div class="form-grid" id="modalFields"></div>
+      <div class="actions">
+        <button type="submit">确认</button>
+        <button type="button" class="ghost" id="modalCancel">取消</button>
+      </div>
+    </form>
   </div>
   <div class="toast" id="toast"></div>
   <script src="/app.js"></script>

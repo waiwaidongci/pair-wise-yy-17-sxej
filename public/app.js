@@ -21,11 +21,36 @@ function fmtDate(value) {
   return new Date(value).toLocaleString('zh-CN', { hour12: false });
 }
 
+function round2(value) {
+  return Math.round((Number(value) + Number.EPSILON) * 100) / 100;
+}
+
+function toLocalInput(value) {
+  const date = value ? new Date(value) : new Date();
+  if (Number.isNaN(date.getTime())) return '';
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+// 未结束记录的实时时长/照度时长，与 rules.js 的口径一致
+function liveHours(item) {
+  const stored = Number(item.hours) || 0;
+  if (item.endedAt) return stored;
+  const start = new Date(item.startedAt || item.createdAt).getTime();
+  if (!Number.isFinite(start)) return stored;
+  return Math.max(stored, (Date.now() - start) / 3600000);
+}
+
+function liveLuxHours(item) {
+  if (item.endedAt) return Number(item.luxHours) || 0;
+  return (Number(item.lux) || 0) * liveHours(item);
+}
+
 function toast(message) {
   const el = $('#toast');
   el.textContent = message;
   el.classList.add('show');
-  setTimeout(() => el.classList.remove('show'), 1800);
+  setTimeout(() => el.classList.remove('show'), 2200);
 }
 
 async function api(path, options = {}) {
@@ -39,16 +64,6 @@ async function api(path, options = {}) {
   }
   if (res.status === 204) return null;
   return res.json();
-}
-
-function valueByPath(source, pathName) {
-  return pathName.split('.').reduce((value, key) => value?.[key], source);
-}
-
-function displayField(item, field) {
-  const value = item[field.name] ?? '';
-  if (field.type === 'select' && field.options) return value || field.options[0];
-  return value;
 }
 
 function collectionLabel(collection) {
@@ -70,7 +85,6 @@ function optionList(items, labelFields) {
 
 function formField(field) {
   const required = field.required ? 'required' : '';
-  const value = field.default ? `value="${escapeHtml(field.default)}"` : '';
   if (field.type === 'textarea') {
     return `<label class="${field.wide ? 'wide' : ''}">${field.label}<textarea name="${field.name}" ${required}></textarea></label>`;
   }
@@ -81,7 +95,13 @@ function formField(field) {
     const items = state.db[field.collection] || [];
     return `<label class="${field.wide ? 'wide' : ''}">${field.label}<select name="${field.name}" ${required}>${optionList(items, field.labelFields)}</select></label>`;
   }
-  return `<label class="${field.wide ? 'wide' : ''}">${field.label}<input type="${field.type || 'text'}" name="${field.name}" ${value} ${required}></label>`;
+  if (field.type === 'datetime-local') {
+    const value = field.defaultNow ? `value="${toLocalInput()}"` : '';
+    return `<label class="${field.wide ? 'wide' : ''}">${field.label}<input type="datetime-local" name="${field.name}" ${value} ${required}></label>`;
+  }
+  const step = field.type === 'number' ? 'step="any"' : '';
+  const value = field.default ? `value="${escapeHtml(field.default)}"` : '';
+  return `<label class="${field.wide ? 'wide' : ''}">${field.label}<input type="${field.type || 'text'}" name="${field.name}" ${value} ${step} ${required}></label>`;
 }
 
 function pill(value, tone = '') {
@@ -95,38 +115,43 @@ function toneFor(value) {
 function historyHtml(item) {
   const history = item.history || [];
   if (!history.length) return '';
-  return `<div class="history">${history.slice(0, 5).map((entry) => `
+  return `<div class="history">${history.slice(0, 6).map((entry) => `
     <div class="history-item"><span>${fmtDate(entry.at)}</span><span>${escapeHtml(entry.action)}${entry.note ? '：' + escapeHtml(entry.note) : ''}</span></div>
   `).join('')}</div>`;
 }
 
-function values(form, view) {
-  const payload = Object.fromEntries(new FormData(form).entries());
-  for (const field of view.fields) {
-    if (field.type === 'number') payload[field.name] = Number(payload[field.name] || 0);
-  }
-  return { ...view.defaults, ...payload };
+function rechecksHtml(item) {
+  const rechecks = item.rechecks || [];
+  if (!rechecks.length) return '';
+  return `<div class="rechecks"><strong>复测记录（藻类覆盖率）</strong>${rechecks.map((entry, index) => `
+    <div class="history-item"><span>${fmtDate(entry.at)}</span><span>第${index + 1}次 · ${escapeHtml(entry.operator)} · ${escapeHtml(String(entry.value))}%</span></div>
+  `).join('')}</div>`;
 }
 
-function renderTabs() {
-  $('#tabs').innerHTML = state.config.views.map((view, index) => `
-    <button class="tab${index === 0 ? ' active' : ''}" data-tab="${view.id}">${escapeHtml(view.label)}</button>
-  `).join('');
-  state.activeTab = state.config.views[0].id;
+function detailValue(item, field) {
+  const raw = item[field.name];
+  let value;
+  if (field.type === 'datetime') value = raw ? fmtDate(raw) : '-';
+  else if (field.type === 'liveHours') value = String(round2(liveHours(item)));
+  else if (field.type === 'liveLuxHours') value = String(round2(liveLuxHours(item)));
+  else if (field.type === 'relation') value = relationLabel(field, raw);
+  else if (raw === null || raw === undefined || raw === '') value = '-';
+  else value = String(raw);
+  if (value !== '-' && (field.prefix || field.suffix)) return `${field.prefix || ''}${value}${field.suffix || ''}`;
+  return value;
 }
 
-function setTab(tabId) {
-  state.activeTab = tabId;
-  $$('.tab').forEach((tab) => tab.classList.toggle('active', tab.dataset.tab === tabId));
-  $$('.view').forEach((view) => view.classList.toggle('active', view.id === tabId));
-}
-
-function renderStats() {
-  return `<div class="stats">${state.config.stats.map((stat) => {
-    const items = state.db[stat.collection] || [];
-    const value = stat.filter ? items.filter((item) => item[stat.filter.field] === stat.filter.value).length : items.length;
-    return `<div class="stat"><span>${escapeHtml(stat.label)}</span><strong>${value}</strong></div>`;
-  }).join('')}</div>`;
+// 动作可见条件：values 枚举 / empty 为空 / filled 非空 / minLength / maxLength
+function matchWhen(item, when = []) {
+  return when.every((cond) => {
+    const value = item[cond.field];
+    if (cond.values) return cond.values.includes(value);
+    if (cond.empty) return value === null || value === undefined || value === '';
+    if (cond.filled) return !(value === null || value === undefined || value === '');
+    if (cond.minLength !== undefined) return (value || []).length >= cond.minLength;
+    if (cond.maxLength !== undefined) return (value || []).length <= cond.maxLength;
+    return true;
+  });
 }
 
 function renderCard(item, collection, view) {
@@ -134,13 +159,11 @@ function renderCard(item, collection, view) {
   const statusValue = item[view.statusField];
   const relation = view.relation ? `<div class="meta">${escapeHtml(relationLabel(view.relation, item[view.relation.localKey]))}</div>` : '';
   const details = (view.detailFields || []).map((field) => {
-    const raw = item[field.name];
-    const value = field.type === 'relation' ? relationLabel(field, raw) : raw;
-    return `<div>${escapeHtml(field.label)}<br><strong>${escapeHtml(value || '-')}</strong></div>`;
+    return `<div>${escapeHtml(field.label)}<br><strong>${escapeHtml(detailValue(item, field))}</strong></div>`;
   }).join('');
   const summary = (view.summaryFields || []).map((field) => item[field]).filter(Boolean).join(' · ');
   const actions = state.config.actions
-    .filter((action) => action.collection === collection)
+    .filter((action) => action.collection === collection && matchWhen(item, action.when))
     .map((action) => `<button class="${action.danger ? 'danger' : 'ghost'}" data-action="${action.id}" data-id="${item.id}">${escapeHtml(action.label)}</button>`)
     .join('');
   return `<article class="card">
@@ -149,6 +172,7 @@ function renderCard(item, collection, view) {
     ${summary ? `<p>${escapeHtml(summary)}</p>` : ''}
     ${details ? `<div class="detail">${details}</div>` : ''}
     ${actions ? `<div class="actions">${actions}</div>` : ''}
+    ${rechecksHtml(item)}
     ${historyHtml(item)}
   </article>`;
 }
@@ -167,6 +191,16 @@ function renderList(view) {
   return items.length ? items.map((item) => renderCard(item, collection, view)).join('') : `<div class="empty">暂无${escapeHtml(collectionLabel(collection))}</div>`;
 }
 
+function renderStats() {
+  return `<div class="stats">${state.config.stats.map((stat) => {
+    const items = state.db[stat.collection] || [];
+    const value = stat.filter
+      ? items.filter((item) => (stat.filter.values || [stat.filter.value]).includes(item[stat.filter.field])).length
+      : items.length;
+    return `<div class="stat"><span>${escapeHtml(stat.label)}</span><strong>${value}</strong></div>`;
+  }).join('')}</div>`;
+}
+
 function renderDashboardView(view) {
   const source = view.focus;
   let items = [...(state.db[source.collection] || [])];
@@ -175,7 +209,7 @@ function renderDashboardView(view) {
   const cardView = state.config.views.find((entry) => entry.collection === source.collection) || source;
   return `<section class="view active" id="${view.id}">
     ${renderStats()}
-    <div class="panel"><h2>${escapeHtml(view.focusTitle)}</h2><div class="list">${items.length ? items.map((item) => renderCard(item, source.collection, cardView)).join('') : '<div class="empty">暂无重点事项</div>'}</div></div>
+    <div class="panel"><h2>${escapeHtml(view.focusTitle)}</h2><div class="list">${items.length ? items.map((item) => renderCard(item, source.collection, cardView)).join('') : '<div class="empty">暂无待复核事项</div>'}</div></div>
   </section>`;
 }
 
@@ -185,6 +219,7 @@ function renderCrudView(view) {
     <div class="grid">
       <form class="panel" data-create="${view.collection}" data-view="${view.id}">
         <h2>${escapeHtml(view.formTitle)}</h2>
+        ${view.hint ? `<p class="hint">${escapeHtml(view.hint)}</p>` : ''}
         <div class="form-grid">${view.fields.map(formField).join('')}</div>
         <div class="actions"><button>${escapeHtml(view.submitLabel || '保存')}</button></div>
       </form>
@@ -203,6 +238,19 @@ function renderCrudView(view) {
   </section>`;
 }
 
+function renderTabs() {
+  $('#tabs').innerHTML = state.config.views.map((view, index) => `
+    <button class="tab${index === 0 ? ' active' : ''}" data-tab="${view.id}">${escapeHtml(view.label)}</button>
+  `).join('');
+  state.activeTab = state.config.views[0].id;
+}
+
+function setTab(tabId) {
+  state.activeTab = tabId;
+  $$('.tab').forEach((tab) => tab.classList.toggle('active', tab.dataset.tab === tabId));
+  $$('.view').forEach((view) => view.classList.toggle('active', view.id === tabId));
+}
+
 function render() {
   $('#title').textContent = state.config.title;
   document.title = state.config.title;
@@ -216,13 +264,79 @@ async function load() {
   render();
 }
 
+// ---- 动作弹窗 ----
+const modalState = { action: null, item: null };
+
+function modalFieldHtml(field, item) {
+  const required = field.required ? 'required' : '';
+  let value = field.prefill ? item[field.prefill] ?? '' : '';
+  if (field.type === 'datetime-local') value = value ? toLocalInput(value) : (field.defaultNow ? toLocalInput() : '');
+  if (field.type === 'textarea') {
+    return `<label class="${field.wide ? 'wide' : ''}">${field.label}<textarea name="${field.name}" ${required}>${escapeHtml(String(value))}</textarea></label>`;
+  }
+  const step = field.type === 'number' ? `step="${field.step || 'any'}"` : '';
+  return `<label class="${field.wide ? 'wide' : ''}">${field.label}<input type="${field.type || 'text'}" name="${field.name}" value="${escapeHtml(String(value))}" ${step} ${required}></label>`;
+}
+
+function openModal(action, item) {
+  modalState.action = action;
+  modalState.item = item;
+  $('#modalTitle').textContent = action.label;
+  $('#modalFields').innerHTML = action.inputs.map((field) => modalFieldHtml(field, item)).join('');
+  $('#modal').hidden = false;
+}
+
+function closeModal() {
+  $('#modal').hidden = true;
+  modalState.action = null;
+  modalState.item = null;
+}
+
+$('#modalForm').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const { action, item } = modalState;
+  if (!action || !item) return;
+  const data = new FormData(event.target);
+  const payload = {};
+  for (const field of action.inputs) {
+    let value = data.get(field.name);
+    if (field.type === 'number') value = value === '' || value === null ? '' : Number(value);
+    if (field.type === 'datetime-local') value = value ? new Date(value).toISOString() : '';
+    payload[field.name] = value;
+  }
+  try {
+    await api(action.path.replace(':id', item.id), {
+      method: action.type === 'edit' ? 'PATCH' : 'POST',
+      body: JSON.stringify(payload)
+    });
+    closeModal();
+    await load();
+    toast('已更新');
+  } catch (error) {
+    toast(error.message);
+  }
+});
+
+$('#modalCancel').addEventListener('click', closeModal);
+$('#modal').addEventListener('click', (event) => {
+  if (event.target.id === 'modal') closeModal();
+});
+
+// ---- 全局事件 ----
 document.addEventListener('click', async (event) => {
   const tab = event.target.closest('.tab');
-  const action = event.target.closest('[data-action]');
+  const button = event.target.closest('[data-action]');
   if (tab) setTab(tab.dataset.tab);
-  if (action) {
+  if (button) {
+    const action = state.config.actions.find((entry) => entry.id === button.dataset.action);
+    const item = (state.db[action?.collection] || []).find((entry) => entry.id === button.dataset.id);
+    if (!action || !item) return;
+    if (action.inputs?.length) {
+      openModal(action, item);
+      return;
+    }
     try {
-      await api(`/api/action/${action.dataset.action}/${action.dataset.id}`, { method: 'POST' });
+      await api(action.path.replace(':id', item.id), { method: action.type === 'edit' ? 'PATCH' : 'POST', body: '{}' });
       await load();
       toast('已更新');
     } catch (error) {
@@ -236,15 +350,28 @@ document.addEventListener('input', (event) => {
   if (view) $(`#list-${view.id}`).innerHTML = renderList(view);
 });
 
+function formValues(form, view) {
+  const payload = Object.fromEntries(new FormData(form).entries());
+  for (const field of view.fields) {
+    if (field.type === 'number') payload[field.name] = Number(payload[field.name] || 0);
+    if (field.type === 'datetime-local') payload[field.name] = payload[field.name] ? new Date(payload[field.name]).toISOString() : '';
+  }
+  return { ...view.defaults, ...payload };
+}
+
 document.addEventListener('submit', async (event) => {
   const form = event.target.closest('[data-create]');
   if (!form) return;
   event.preventDefault();
   const view = state.config.views.find((entry) => entry.id === form.dataset.view);
-  await api(`/api/${form.dataset.create}`, { method: 'POST', body: JSON.stringify(values(form, view)) });
-  form.reset();
-  await load();
-  toast('已保存');
+  try {
+    const res = await api(`/api/${form.dataset.create}`, { method: 'POST', body: JSON.stringify(formValues(form, view)) });
+    form.reset();
+    await load();
+    toast(res?.reused ? '该样点已有未结束照明，沿用首次记录' : '已保存');
+  } catch (error) {
+    toast(error.message);
+  }
 });
 
 $('#refreshBtn').addEventListener('click', () => load().then(() => toast('已刷新')));
